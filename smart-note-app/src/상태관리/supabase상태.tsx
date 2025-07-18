@@ -1,0 +1,372 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { 폴더타입, 노트타입, 폴더설정타입 } from '../타입';
+import { 데이터베이스 } from '../서비스/데이터베이스서비스';
+
+// Context 타입 정의
+interface Supabase상태컨텍스트타입 {
+  // 상태
+  폴더목록: 폴더타입[];
+  활성폴더: 폴더타입 | null;
+  활성노트: 노트타입 | null;
+  로딩중: boolean;
+  에러: string | null;
+  
+  // 폴더 관련 함수들
+  폴더선택하기: (폴더아이디: string) => void;
+  새폴더생성하기: (폴더이름: string) => Promise<void>;
+  폴더삭제하기: (폴더아이디: string) => Promise<void>;
+  폴더이름변경하기: (폴더아이디: string, 새이름: string) => Promise<void>;
+  폴더설정업데이트하기: (폴더아이디: string, 새설정: Partial<폴더설정타입>) => Promise<void>;
+  
+  // 노트 관련 함수들
+  노트선택하기: (노트아이디: string) => void;
+  새노트생성하기: (폴더아이디: string, 노트제목: string) => Promise<string>;
+  노트삭제하기: (폴더아이디: string, 노트아이디: string) => Promise<void>;
+  노트업데이트하기: (노트아이디: string, 업데이트내용: Partial<노트타입>) => Promise<void>;
+  
+  // 채팅 메시지 관련 함수들
+  새메시지추가하기: (노트아이디: string, 메시지텍스트: string, 옵션?: { category?: string; author?: string; 부모메시지아이디?: string }) => Promise<void>;
+  
+  // 데이터 관리 함수들
+  데이터새로고침하기: () => Promise<void>;
+  localStorage마이그레이션하기: () => Promise<void>;
+}
+
+// localStorage 키
+const 저장소키 = {
+  활성폴더아이디: 'smart-note-활성폴더아이디',
+  활성노트아이디: 'smart-note-활성노트아이디'
+};
+
+// localStorage에서 기존 데이터 불러오기 (마이그레이션용)
+const 기존localStorage데이터불러오기 = (): 폴더타입[] => {
+  try {
+    const 저장된문자열 = localStorage.getItem('smart-note-폴더목록');
+    if (저장된문자열) {
+      const 파싱된데이터 = JSON.parse(저장된문자열);
+      return 파싱된데이터.map((폴더: any) => ({
+        ...폴더,
+        노트목록: 폴더.노트목록.map((노트: any) => ({
+          ...노트,
+          생성시간: new Date(노트.생성시간),
+          수정시간: new Date(노트.수정시간),
+          채팅메시지목록: 노트.채팅메시지목록.map((메시지: any) => ({
+            ...메시지,
+            타임스탬프: new Date(메시지.타임스탬프),
+            하위메시지목록: 메시지.하위메시지목록 ? 메시지.하위메시지목록.map((하위메시지: any) => ({
+              ...하위메시지,
+              타임스탬프: new Date(하위메시지.타임스탬프)
+            })) : []
+          }))
+        }))
+      }));
+    }
+  } catch (오류) {
+    console.error('기존 localStorage 데이터 불러오기 실패:', 오류);
+  }
+  return [];
+};
+
+// Context 생성
+const Supabase상태컨텍스트 = createContext<Supabase상태컨텍스트타입 | undefined>(undefined);
+
+// Provider 컴포넌트
+interface Supabase상태제공자속성 {
+  children: ReactNode;
+}
+
+export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = ({ children }) => {
+  const [폴더목록, 폴더목록설정] = useState<폴더타입[]>([]);
+  const [활성폴더, 활성폴더설정] = useState<폴더타입 | null>(null);
+  const [활성노트, 활성노트설정] = useState<노트타입 | null>(null);
+  const [로딩중, 로딩중설정] = useState(true);
+  const [에러, 에러설정] = useState<string | null>(null);
+
+  // 초기 데이터 로드
+  useEffect(() => {
+    데이터새로고침하기();
+  }, []);
+
+  // 데이터 새로고침
+  const 데이터새로고침하기 = async () => {
+    try {
+      로딩중설정(true);
+      에러설정(null);
+      
+      const 폴더데이터 = await 데이터베이스.폴더목록가져오기();
+      폴더목록설정(폴더데이터);
+
+      // 활성 상태 복원
+      const 저장된활성폴더아이디 = localStorage.getItem(저장소키.활성폴더아이디);
+      const 저장된활성노트아이디 = localStorage.getItem(저장소키.활성노트아이디);
+
+      if (저장된활성폴더아이디) {
+        const 복원폴더 = 폴더데이터.find(폴더 => 폴더.아이디 === 저장된활성폴더아이디);
+        if (복원폴더) {
+          활성폴더설정(복원폴더);
+          
+          if (저장된활성노트아이디) {
+            const 복원노트 = 복원폴더.노트목록.find(노트 => 노트.아이디 === 저장된활성노트아이디);
+            활성노트설정(복원노트 || 복원폴더.노트목록[0] || null);
+          } else {
+            활성노트설정(복원폴더.노트목록[0] || null);
+          }
+        }
+      } else if (폴더데이터.length > 0) {
+        활성폴더설정(폴더데이터[0]);
+        활성노트설정(폴더데이터[0].노트목록[0] || null);
+      }
+
+      console.log('Supabase 데이터 로드 완료');
+    } catch (오류) {
+      console.error('데이터 로드 실패:', 오류);
+      에러설정('데이터를 불러오는데 실패했습니다.');
+    } finally {
+      로딩중설정(false);
+    }
+  };
+
+  // localStorage 마이그레이션
+  const localStorage마이그레이션하기 = async () => {
+    try {
+      로딩중설정(true);
+      에러설정(null);
+
+      const 기존데이터 = 기존localStorage데이터불러오기();
+      if (기존데이터.length > 0) {
+        await 데이터베이스.localStorage데이터마이그레이션하기(기존데이터);
+        
+        // 마이그레이션 후 데이터 새로고침
+        await 데이터새로고침하기();
+        
+        // 기존 localStorage 데이터는 백업용으로 이름 변경
+        const 기존데이터문자열 = localStorage.getItem('smart-note-폴더목록');
+        if (기존데이터문자열) {
+          localStorage.setItem('smart-note-폴더목록-backup', 기존데이터문자열);
+          localStorage.removeItem('smart-note-폴더목록');
+        }
+        
+        alert('기존 데이터가 성공적으로 Supabase로 마이그레이션되었습니다!');
+      } else {
+        alert('마이그레이션할 기존 데이터가 없습니다.');
+      }
+    } catch (오류) {
+      console.error('마이그레이션 실패:', 오류);
+      에러설정('데이터 마이그레이션에 실패했습니다.');
+    } finally {
+      로딩중설정(false);
+    }
+  };
+
+  // 활성 상태 저장
+  useEffect(() => {
+    if (활성폴더) {
+      localStorage.setItem(저장소키.활성폴더아이디, 활성폴더.아이디);
+    }
+  }, [활성폴더]);
+
+  useEffect(() => {
+    if (활성노트) {
+      localStorage.setItem(저장소키.활성노트아이디, 활성노트.아이디);
+    }
+  }, [활성노트]);
+
+  // 폴더 선택
+  const 폴더선택하기 = (폴더아이디: string) => {
+    const 선택된폴더 = 폴더목록.find(폴더 => 폴더.아이디 === 폴더아이디);
+    if (선택된폴더) {
+      활성폴더설정(선택된폴더);
+      활성노트설정(선택된폴더.노트목록[0] || null);
+      console.log('폴더 선택됨:', 선택된폴더.이름);
+    }
+  };
+
+  // 새 폴더 생성
+  const 새폴더생성하기 = async (폴더이름: string) => {
+    try {
+      로딩중설정(true);
+      
+      const 기본설정: 폴더설정타입 = {
+        시간표시여부: true,
+        입력방식: '단순채팅',
+        하위입력활성화: false,
+      };
+      
+      await 데이터베이스.폴더생성하기(폴더이름, 기본설정);
+      await 데이터새로고침하기();
+      
+      console.log('새 폴더 생성됨:', 폴더이름);
+    } catch (오류) {
+      console.error('폴더 생성 실패:', 오류);
+      에러설정('폴더 생성에 실패했습니다.');
+    } finally {
+      로딩중설정(false);
+    }
+  };
+
+  // 폴더 삭제
+  const 폴더삭제하기 = async (폴더아이디: string) => {
+    try {
+      로딩중설정(true);
+      
+      await 데이터베이스.폴더삭제하기(폴더아이디);
+      await 데이터새로고침하기();
+      
+      // 활성 폴더가 삭제된 폴더라면 첫 번째 폴더로 변경
+      if (활성폴더?.아이디 === 폴더아이디) {
+        const 남은폴더 = 폴더목록.filter(폴더 => 폴더.아이디 !== 폴더아이디);
+        활성폴더설정(남은폴더[0] || null);
+        활성노트설정(남은폴더[0]?.노트목록[0] || null);
+      }
+      
+      console.log('폴더 삭제됨:', 폴더아이디);
+    } catch (오류) {
+      console.error('폴더 삭제 실패:', 오류);
+      에러설정('폴더 삭제에 실패했습니다.');
+    } finally {
+      로딩중설정(false);
+    }
+  };
+
+  // 폴더 이름 변경
+  const 폴더이름변경하기 = async (폴더아이디: string, 새이름: string) => {
+    try {
+      await 데이터베이스.폴더이름변경하기(폴더아이디, 새이름);
+      await 데이터새로고침하기();
+      
+      console.log('폴더 이름 변경됨:', 새이름);
+    } catch (오류) {
+      console.error('폴더 이름 변경 실패:', 오류);
+      에러설정('폴더 이름 변경에 실패했습니다.');
+    }
+  };
+
+  // 폴더 설정 업데이트
+  const 폴더설정업데이트하기 = async (폴더아이디: string, 새설정: Partial<폴더설정타입>) => {
+    try {
+      await 데이터베이스.폴더설정업데이트하기(폴더아이디, 새설정);
+      await 데이터새로고침하기();
+      
+      console.log('폴더 설정 업데이트됨:', 폴더아이디, 새설정);
+    } catch (오류) {
+      console.error('폴더 설정 업데이트 실패:', 오류);
+      에러설정('폴더 설정 업데이트에 실패했습니다.');
+    }
+  };
+
+  // 노트 선택
+  const 노트선택하기 = (노트아이디: string) => {
+    if (!활성폴더) return;
+    
+    const 선택된노트 = 활성폴더.노트목록.find(노트 => 노트.아이디 === 노트아이디);
+    if (선택된노트) {
+      활성노트설정(선택된노트);
+      console.log('노트 선택됨:', 선택된노트.제목);
+    }
+  };
+
+  // 새 노트 생성
+  const 새노트생성하기 = async (폴더아이디: string, 노트제목: string): Promise<string> => {
+    try {
+      const 새노트아이디 = await 데이터베이스.노트생성하기(폴더아이디, 노트제목);
+      await 데이터새로고침하기();
+      
+      // 새로 생성된 노트를 활성 노트로 설정
+      const 업데이트된폴더 = 폴더목록.find(폴더 => 폴더.아이디 === 폴더아이디);
+      const 새노트 = 업데이트된폴더?.노트목록.find(노트 => 노트.아이디 === 새노트아이디);
+      if (새노트) {
+        활성노트설정(새노트);
+      }
+      
+      console.log('새 노트 생성됨:', 노트제목);
+      return 새노트아이디;
+    } catch (오류) {
+      console.error('노트 생성 실패:', 오류);
+      에러설정('노트 생성에 실패했습니다.');
+      throw 오류;
+    }
+  };
+
+  // 노트 삭제
+  const 노트삭제하기 = async (폴더아이디: string, 노트아이디: string) => {
+    try {
+      await 데이터베이스.노트삭제하기(노트아이디);
+      await 데이터새로고침하기();
+      
+      // 활성 노트가 삭제된 노트라면 null로 설정
+      if (활성노트?.아이디 === 노트아이디) {
+        활성노트설정(null);
+      }
+      
+      console.log('노트 삭제됨:', 노트아이디);
+    } catch (오류) {
+      console.error('노트 삭제 실패:', 오류);
+      에러설정('노트 삭제에 실패했습니다.');
+    }
+  };
+
+  // 노트 업데이트
+  const 노트업데이트하기 = async (노트아이디: string, 업데이트내용: Partial<노트타입>) => {
+    try {
+      await 데이터베이스.노트업데이트하기(노트아이디, 업데이트내용);
+      await 데이터새로고침하기();
+      
+      console.log('노트 업데이트됨:', 노트아이디, 업데이트내용);
+    } catch (오류) {
+      console.error('노트 업데이트 실패:', 오류);
+      에러설정('노트 업데이트에 실패했습니다.');
+    }
+  };
+
+  // 새 메시지 추가
+  const 새메시지추가하기 = async (
+    노트아이디: string, 
+    메시지텍스트: string, 
+    옵션?: { category?: string; author?: string; 부모메시지아이디?: string }
+  ) => {
+    try {
+      await 데이터베이스.메시지추가하기(노트아이디, 메시지텍스트, 옵션);
+      await 데이터새로고침하기();
+      
+      console.log('새 메시지 추가됨:', 메시지텍스트);
+    } catch (오류) {
+      console.error('메시지 추가 실패:', 오류);
+      에러설정('메시지 추가에 실패했습니다.');
+    }
+  };
+
+  const 컨텍스트값: Supabase상태컨텍스트타입 = {
+    폴더목록,
+    활성폴더,
+    활성노트,
+    로딩중,
+    에러,
+    폴더선택하기,
+    새폴더생성하기,
+    폴더삭제하기,
+    폴더이름변경하기,
+    폴더설정업데이트하기,
+    노트선택하기,
+    새노트생성하기,
+    노트삭제하기,
+    노트업데이트하기,
+    새메시지추가하기,
+    데이터새로고침하기,
+    localStorage마이그레이션하기,
+  };
+
+  return (
+    <Supabase상태컨텍스트.Provider value={컨텍스트값}>
+      {children}
+    </Supabase상태컨텍스트.Provider>
+  );
+};
+
+// 커스텀 훅
+export const Supabase상태사용하기 = () => {
+  const 상태 = useContext(Supabase상태컨텍스트);
+  if (!상태) {
+    throw new Error('Supabase상태사용하기는 Supabase상태제공자 내부에서만 사용할 수 있습니다');
+  }
+  return 상태;
+};

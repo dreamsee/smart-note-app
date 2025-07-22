@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Supabase상태사용하기 } from '../상태관리/supabase상태';
+import { 태그필터상태사용하기 } from '../상태관리/태그필터상태';
 import 폴더설정모달 from './폴더설정모달';
+import 태그클라우드 from './태그클라우드';
 
 // 폴더 목록 컴포넌트 - Supabase 연동
 const 폴더목록: React.FC = () => {
@@ -13,6 +15,13 @@ const 폴더목록: React.FC = () => {
 
   const [설정모달열림, 설정모달열림설정] = useState(false);
   const [설정대상폴더, 설정대상폴더설정] = useState<typeof 활성폴더>(null);
+  
+  // 공유된 태그 필터링 상태
+  const { 
+    선택된태그목록, 
+    선택된태그목록설정,
+    필터통계 
+  } = 태그필터상태사용하기();
 
   const 폴더클릭처리 = (폴더아이디: string) => {
     폴더선택하기(폴더아이디);
@@ -76,6 +85,11 @@ const 폴더목록: React.FC = () => {
                 </div>
                 <div style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>
                   {폴더.노트목록.length}개 노트 · {폴더.폴더설정.입력방식}
+                  {활성폴더?.아이디 === 폴더.아이디 && 선택된태그목록.length > 0 && (
+                    <span style={{ color: '#007bff', marginLeft: '4px' }}>
+                      (필터: {필터통계.현재폴더결과수}개)
+                    </span>
+                  )}
                 </div>
               </div>
               
@@ -96,6 +110,15 @@ const 폴더목록: React.FC = () => {
             </div>
           ))}
         </div>
+        
+        {/* 태그 클라우드 */}
+        <태그클라우드
+          폴더목록={폴더목록}
+          활성폴더={활성폴더}
+          선택된태그목록={선택된태그목록}
+          태그선택변경={선택된태그목록설정}
+          최대태그수={12}
+        />
       </div>
 
       {/* 폴더 설정 모달 */}

@@ -178,14 +178,14 @@ export class 데이터베이스서비스 {
   // 노트 관련 메서드들
   // ===================
 
-  async 노트생성하기(폴더아이디: string, 노트제목: string): Promise<string> {
+  async 노트생성하기(폴더아이디: string, 노트제목: string, 노트내용?: string): Promise<string> {
     try {
       const { data, error } = await 타입드supabase
         .from('노트목록')
         .insert({
           폴더아이디: 폴더아이디,
           제목: 노트제목,
-          내용: '',
+          내용: 노트내용 || '',
           요약: ''
         })
         .select()

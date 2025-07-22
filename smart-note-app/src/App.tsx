@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import './App.css';
 import 채팅패널 from './컴포넌트/채팅패널';
 import 노트패널 from './컴포넌트/노트패널';
-import 폴더목록 from './컴포넌트/폴더목록';
+import 폴더목록컴포넌트 from './컴포넌트/폴더목록';
 import 설정패널 from './컴포넌트/설정패널';
 import { Supabase상태제공자, Supabase상태사용하기 } from './상태관리/supabase상태';
+import { 태그필터상태제공자 } from './상태관리/태그필터상태';
 
 // 로딩 상태를 보여주는 컴포넌트
 const 로딩화면: React.FC = () => {
@@ -73,7 +74,7 @@ const 로딩화면: React.FC = () => {
 
 // 메인 앱 컴포넌트
 const 메인앱: React.FC = () => {
-  const { 로딩중 } = Supabase상태사용하기();
+  const { 로딩중, 폴더목록, 활성폴더 } = Supabase상태사용하기();
   
   // 저장된 분할 비율 불러오기 또는 기본값 사용
   const 초기분할비율 = () => {
@@ -93,9 +94,10 @@ const 메인앱: React.FC = () => {
     <>
       <로딩화면 />
       {!로딩중 && (
-        <div className="앱-컨테이너">
-          {/* 전체 레이아웃: 좌우 패널 분할 */}
-          <div className="메인-레이아웃">
+        <태그필터상태제공자 폴더목록={폴더목록} 활성폴더={활성폴더}>
+          <div className="앱-컨테이너">
+            {/* 전체 레이아웃: 좌우 패널 분할 */}
+            <div className="메인-레이아웃">
             {/* 왼쪽 영역: 폴더 목록 + 채팅 패널 (크기조절 가능) */}
             <div className="왼쪽-패널" style={{ position: 'relative' }}>
               {/* 폴더 목록 영역 */}
@@ -110,7 +112,7 @@ const 메인앱: React.FC = () => {
                   overflow: 'hidden'
                 }}
               >
-                <폴더목록 />
+                <폴더목록컴포넌트 />
               </div>
 
               {/* 크기조절 분할선 */}
@@ -184,7 +186,8 @@ const 메인앱: React.FC = () => {
           
           {/* 설정 패널 */}
           <설정패널 />
-        </div>
+          </div>
+        </태그필터상태제공자>
       )}
     </>
   );

@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import YouTubePlayer from "@/components/YouTubePlayer";
+import { Coordinates } from "@/components/TextOverlay";
 import NoteArea from "@/components/NoteArea";
 import VideoLoader from "@/components/VideoLoader";
 import Notification from "@/components/Notification";
 import { useToast } from "@/hooks/use-toast";
 import { useVirtualKeyboard } from "@/hooks/useVirtualKeyboard";
+import { OverlayData } from "@/components/TextOverlay";
 
 const HomePage = () => {
   const [player, setPlayer] = useState<any | null>(null);
@@ -19,6 +21,7 @@ const HomePage = () => {
   const [availableRates, setAvailableRates] = useState<number[]>([0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
   const [currentRate, setCurrentRate] = useState(1);
   const [timestamps, setTimestamps] = useState<any[]>([]); // 타임스탬프 공유 상태
+  const [overlays, setOverlays] = useState<OverlayData[]>([]); // 오버레이 공유 상태
   const { toast } = useToast();
   const { isKeyboardVisible, keyboardHeight } = useVirtualKeyboard();
 
@@ -42,12 +45,20 @@ const HomePage = () => {
     });
   };
 
+  // 드래그로 오버레이 위치 변경 처리
+  const handleOverlayPositionChange = (id: string, newCoordinates: Coordinates) => {
+    setOverlays(prev => prev.map(overlay => 
+      overlay.id === id 
+        ? { ...overlay, coordinates: newCoordinates }
+        : overlay
+    ));
+  };
+
   return (
     <div 
-      className="container mx-auto px-4 py-4 max-w-md min-h-screen bg-secondary transition-all duration-300"
+      className="container mx-auto px-4 py-4 max-w-none md:max-w-4xl min-h-screen bg-secondary transition-all duration-300"
       style={{
-        height: isKeyboardVisible ? `calc(100vh - ${keyboardHeight}px)` : '100vh',
-        overflow: 'hidden'
+        minHeight: isKeyboardVisible ? `calc(100vh - ${keyboardHeight}px)` : '100vh',
       }}
     >
       <header className="mb-4">
@@ -75,6 +86,8 @@ const HomePage = () => {
           setPlayerState={setPlayerState}
           showNotification={showNotification}
           timestamps={timestamps}
+          overlays={overlays}
+          onOverlayPositionChange={handleOverlayPositionChange}
         />
       </div>
 
@@ -92,6 +105,8 @@ const HomePage = () => {
         currentVideoInfo={currentVideoInfo}
         timestamps={timestamps}
         setTimestamps={setTimestamps}
+        overlays={overlays}
+        setOverlays={setOverlays}
       />
 
       <Notification />

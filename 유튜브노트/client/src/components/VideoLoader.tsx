@@ -120,8 +120,10 @@ const VideoLoader: React.FC<VideoLoaderProps> = ({
         />
         <Button 
           onClick={handleSearch} 
-          disabled={!isPlayerReady || isSearching}
+          disabled={!isPlayerReady || isSearching || !searchQuery.trim()}
           size="default"
+          className="hover:bg-primary/90 active:scale-95 transition-transform"
+          title="YouTube 영상 검색"
         >
           {isSearching ? (
             <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

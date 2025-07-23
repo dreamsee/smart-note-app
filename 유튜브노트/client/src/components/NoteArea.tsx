@@ -3,9 +3,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatTime } from "@/lib/youtubeUtils";
-import { Clock, InfoIcon, Play, Pause, Save, CheckCircle } from "lucide-react";
+import { Clock, InfoIcon, Play, Pause, Save, CheckCircle, Type, FileText } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { OverlayData } from "./TextOverlay";
+import OverlayInput from "./OverlayInput";
 
 // YT 전역 객체에 대한 타입 선언
 declare global {
@@ -43,6 +45,8 @@ interface NoteAreaProps {
   };
   timestamps: any[];
   setTimestamps: React.Dispatch<React.SetStateAction<any[]>>;
+  overlays: OverlayData[];
+  setOverlays: React.Dispatch<React.SetStateAction<OverlayData[]>>;
 }
 
 const NoteArea: React.FC<NoteAreaProps> = ({
@@ -59,6 +63,8 @@ const NoteArea: React.FC<NoteAreaProps> = ({
   currentVideoInfo,
   timestamps,
   setTimestamps,
+  overlays,
+  setOverlays,
 }) => {
   const [noteText, setNoteText] = useState("");
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
@@ -66,6 +72,7 @@ const NoteArea: React.FC<NoteAreaProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [inputMode, setInputMode] = useState<'note' | 'overlay'>('note');
   const [volume, setVolume] = useState(100); // 볼륨 상태 (0-100)
   const [playbackRate, setPlaybackRate] = useState(1.0); // 재생 속도 (0.25-2.0)
   const [duration, setDuration] = useState(5); // 지속시간 (초)
@@ -818,6 +825,9 @@ const NoteArea: React.FC<NoteAreaProps> = ({
       setTimestampStartMode(null);
       setNextAllowedTimestampIndex(0); // 첫 번째 타임스탬프부터 시작
       setExecutedTimestampIds([]); // 실행 기록 초기화
+      
+      // 오버레이 초기화
+      setOverlays([]);
     }
   }, [currentVideoId, currentVideoInfo, player, isPlayerReady]);
 
@@ -1160,6 +1170,28 @@ const NoteArea: React.FC<NoteAreaProps> = ({
   return (
     <Card>
       <CardContent className="p-3">
+        {/* 모바일용 모드 전환 버튼 (md 미만에서만 표시) */}
+        <div className="flex mb-3 bg-gray-100 rounded-lg p-1 md:hidden">
+          <Button
+            variant={inputMode === 'note' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setInputMode('note')}
+            className="flex-1 flex items-center justify-center"
+          >
+            <FileText className="w-4 h-4 mr-1" />
+            노트
+          </Button>
+          <Button
+            variant={inputMode === 'overlay' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setInputMode('overlay')}
+            className="flex-1 flex items-center justify-center"
+          >
+            <Type className="w-4 h-4 mr-1" />
+            화면 텍스트
+          </Button>
+        </div>
+
         <div className="mt-0">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-gray-700">재생 컨트롤</p>
@@ -1309,24 +1341,83 @@ const NoteArea: React.FC<NoteAreaProps> = ({
             도장
           </Button>
         </div>
-        <Textarea
-          id="noteArea"
-          ref={textareaRef}
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value)}
-          onDoubleClick={handleTimestampClick}
-          placeholder="여기에 노트를 작성하세요. [00:00:00] 더블클릭하면 해당 시간으로 이동하고 수정사항이 변경됩니다. 
+        {/* 모바일용 조건부 렌더링 (md 미만에서만 표시) */}
+        <div className="md:hidden">
+          {inputMode === 'note' ? (
+            <>
+              <Textarea
+                id="noteArea"
+                ref={textareaRef}
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                onDoubleClick={handleTimestampClick}
+                placeholder="여기에 노트를 작성하세요. [00:00:00] 더블클릭하면 해당 시간으로 이동하고 수정사항이 변경됩니다. 
 버튼으로 생성된 것만 제대로 작동합니다."
-          className="w-full resize-y min-h-[130px]"
-        />
-        
+                className="w-full resize-y min-h-[130px]"
+              />
+              
+              <div className="flex justify-between mt-2">
+                <p className="text-xs text-gray-500 flex items-center">
+                  <InfoIcon className="h-3 w-3 mr-1" /> 도장 형식: [HH:MM:SS, 100%, 1.00x]]
+                </p>
+                <div>
+                  <span className={`text-xs ${getStatusClass()}`}>{getStatusMessage()}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <OverlayInput
+              player={player}
+              isPlayerReady={isPlayerReady}
+              overlays={overlays}
+              setOverlays={setOverlays}
+              showNotification={showNotification}
+            />
+          )}
+        </div>
 
-        <div className="flex justify-between mt-2">
-          <p className="text-xs text-gray-500 flex items-center">
-            <InfoIcon className="h-3 w-3 mr-1" /> 도장 형식: [HH:MM:SS, 100%, 1.00x]]
-          </p>
-          <div>
-            <span className={`text-xs ${getStatusClass()}`}>{getStatusMessage()}</span>
+        {/* PC용 좌우 분할 레이아웃 (md 이상에서만 표시) */}
+        <div className="hidden md:flex gap-6">
+          {/* 좌측: 노트 입력 */}
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+              <FileText className="w-4 h-4 mr-2" />
+              노트 작성
+            </h3>
+            <Textarea
+              id="noteArea"
+              ref={textareaRef}
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onDoubleClick={handleTimestampClick}
+              placeholder="여기에 노트를 작성하세요. [00:00:00] 더블클릭하면 해당 시간으로 이동하고 수정사항이 변경됩니다. 
+버튼으로 생성된 것만 제대로 작동합니다."
+              className="w-full resize-y min-h-[200px]"
+            />
+            
+            <div className="flex justify-between mt-2">
+              <p className="text-xs text-gray-500 flex items-center">
+                <InfoIcon className="h-3 w-3 mr-1" /> 도장 형식: [HH:MM:SS, 100%, 1.00x]]
+              </p>
+              <div>
+                <span className={`text-xs ${getStatusClass()}`}>{getStatusMessage()}</span>
+              </div>
+            </div>
+          </div>
+          
+          {/* 우측: 화면 텍스트 오버레이 */}
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+              <Type className="w-4 h-4 mr-2" />
+              화면 텍스트
+            </h3>
+            <OverlayInput
+              player={player}
+              isPlayerReady={isPlayerReady}
+              overlays={overlays}
+              setOverlays={setOverlays}
+              showNotification={showNotification}
+            />
           </div>
         </div>
       </CardContent>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import TextOverlay, { OverlayData, Coordinates } from "./TextOverlay";
 
 interface YouTubePlayerProps {
   player: any | null; // YT.Player 대신 any 사용
@@ -11,6 +12,8 @@ interface YouTubePlayerProps {
   showNotification: (message: string, type: "info" | "success" | "warning" | "error") => void;
   onAddTimestamp?: () => void;
   timestamps?: any[]; // 타임스탬프 구간 하이라이트용
+  overlays?: OverlayData[]; // 텍스트 오버레이 데이터
+  onOverlayPositionChange?: (id: string, coordinates: Coordinates) => void;
 }
 
 const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
@@ -22,6 +25,8 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   setPlayerState,
   showNotification,
   timestamps = [],
+  overlays = [],
+  onOverlayPositionChange,
 }) => {
   const [availableRates, setAvailableRates] = useState<number[]>([]);
   const [currentRate, setCurrentRate] = useState(1);
@@ -185,10 +190,19 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
   return (
     <div className="mb-4">
-      <div id="player" className="w-full aspect-video bg-black rounded shadow-md">
-        <div className="flex items-center justify-center h-full bg-gray-800 text-white rounded">
-          <p>동영상을 검색해 주세요</p>
+      <div className="relative w-full aspect-video bg-black rounded shadow-md youtube-player-container">
+        <div id="player" className="w-full h-full">
+          <div className="flex items-center justify-center h-full bg-gray-800 text-white rounded">
+            <p>동영상을 검색해 주세요</p>
+          </div>
         </div>
+        {/* 텍스트 오버레이 */}
+        <TextOverlay 
+          overlays={overlays} 
+          currentTime={currentTime} 
+          isPlaying={isPlaying}
+          onOverlayPositionChange={onOverlayPositionChange}
+        />
       </div>
       
       {/* 커스텀 진행바 (타임스탬프 하이라이트 포함) */}

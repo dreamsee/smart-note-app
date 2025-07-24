@@ -57,4 +57,24 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* 스크롤바 완전 숨기기 + 뷰포트 너비 고정 */
+  html {
+    overflow-y: auto; /* 필요시에만 스크롤바 */
+    overflow-x: hidden; /* 가로 스크롤 완전 차단 */
+  }
+  
+  body {
+    margin-right: calc(-1 * (100vw - 100%)); /* 스크롤바 너비만큼 우측 여백 보정 */
+  }
+  
+  /* 스크롤바 완전 숨기기 (WebKit 브라우저) */
+  ::-webkit-scrollbar {
+    display: none; /* 스크롤바 완전 제거 */
+  }
+  
+  /* Firefox용 스크롤바 숨기기 */
+  html {
+    scrollbar-width: none; /* Firefox에서 스크롤바 완전 제거 */
+  }
 }

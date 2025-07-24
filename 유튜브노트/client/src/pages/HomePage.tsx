@@ -4,6 +4,7 @@ import { Coordinates } from "@/components/TextOverlay";
 import NoteArea from "@/components/NoteArea";
 import VideoLoader from "@/components/VideoLoader";
 import Notification from "@/components/Notification";
+import { RecordingSession } from "@/components/RecordingMode";
 import { useToast } from "@/hooks/use-toast";
 import { useVirtualKeyboard } from "@/hooks/useVirtualKeyboard";
 import { OverlayData } from "@/components/TextOverlay";
@@ -18,10 +19,13 @@ const HomePage = () => {
     thumbnailUrl: string;
   } | undefined>(undefined);
   const [playerState, setPlayerState] = useState(-1);
-  const [availableRates, setAvailableRates] = useState<number[]>([0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
+  const [availableRates] = useState<number[]>([0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
   const [currentRate, setCurrentRate] = useState(1);
   const [timestamps, setTimestamps] = useState<any[]>([]); // 타임스탬프 공유 상태
   const [overlays, setOverlays] = useState<OverlayData[]>([]); // 오버레이 공유 상태
+  const [recordingSessions, setRecordingSessions] = useState<RecordingSession[]>([]); // 녹화 세션 목록
+  const [sessionToApply, setSessionToApply] = useState<RecordingSession | null>(null); // 노트에 적용할 세션
+  const [currentPlayTime, setCurrentPlayTime] = useState(0); // 현재 재생 시간
   const { toast } = useToast();
   const { isKeyboardVisible, keyboardHeight } = useVirtualKeyboard();
 
@@ -53,6 +57,79 @@ const HomePage = () => {
         : overlay
     ));
   };
+
+  // 녹화 세션 관련 함수들
+  const handleRecordingComplete = (session: RecordingSession) => {
+    setRecordingSessions(prev => [session, ...prev]);
+    // localStorage에 저장
+    localStorage.setItem('recordingSessions', JSON.stringify([session, ...recordingSessions]));
+  };
+
+  const handleEditSession = (_session: RecordingSession) => {
+    // 편집 모달 열기 (향후 구현)
+    showNotification("편집 기능은 곧 추가될 예정입니다.", "info");
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    setRecordingSessions(prev => {
+      const updated = prev.filter(s => s.id !== sessionId);
+      localStorage.setItem('recordingSessions', JSON.stringify(updated));
+      return updated;
+    });
+    showNotification("녹화 세션이 삭제되었습니다.", "info");
+  };
+
+  const handleCopySession = (session: RecordingSession) => {
+    const copiedSession: RecordingSession = {
+      ...session,
+      id: `rec-${Date.now()}`,
+      title: `${session.title} (복사본)`,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    setRecordingSessions(prev => [copiedSession, ...prev]);
+    localStorage.setItem('recordingSessions', JSON.stringify([copiedSession, ...recordingSessions]));
+    showNotification("녹화 세션이 복사되었습니다.", "success");
+  };
+
+  const handleApplyToNote = (session: RecordingSession) => {
+    setSessionToApply(session);
+    showNotification("녹화 세션을 노트에 적용했습니다.", "success");
+    
+    // 세션 적용 후 상태 초기화 (1초 후)
+    setTimeout(() => {
+      setSessionToApply(null);
+    }, 1000);
+  };
+
+  // localStorage에서 녹화 세션 불러오기
+  useEffect(() => {
+    const savedSessions = localStorage.getItem('recordingSessions');
+    if (savedSessions) {
+      try {
+        const sessions = JSON.parse(savedSessions);
+        setRecordingSessions(sessions);
+      } catch (error) {
+        console.error('녹화 세션 로드 실패:', error);
+      }
+    }
+  }, []);
+
+  // 재생 시간 추적
+  useEffect(() => {
+    if (!player || !isPlayerReady) return;
+
+    const interval = setInterval(() => {
+      try {
+        const time = player.getCurrentTime();
+        setCurrentPlayTime(time);
+      } catch (error) {
+        // 플레이어가 준비되지 않은 경우 무시
+      }
+    }, 500); // 0.5초마다 업데이트
+
+    return () => clearInterval(interval);
+  }, [player, isPlayerReady]);
 
   return (
     <div 
@@ -107,6 +184,13 @@ const HomePage = () => {
         setTimestamps={setTimestamps}
         overlays={overlays}
         setOverlays={setOverlays}
+        onRecordingComplete={handleRecordingComplete}
+        sessionToApply={sessionToApply}
+        recordingSessions={recordingSessions}
+        onEditRecordingSession={handleEditSession}
+        onDeleteRecordingSession={handleDeleteSession}
+        onCopyRecordingSession={handleCopySession}
+        onApplyRecordingToNote={handleApplyToNote}
       />
 
       <Notification />

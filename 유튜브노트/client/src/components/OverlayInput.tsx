@@ -27,6 +27,7 @@ const OverlayInput: React.FC<OverlayInputProps> = ({
   const [overlayText, setOverlayText] = useState("");
   const [positionMode] = useState<PositionMode>("coordinate"); // 항상 좌표 모드로 고정
   const [coordinates, setCoordinates] = useState<Coordinates>({ x: 50, y: 90, unit: "%" });
+  const [position] = useState<OverlayPosition>("bottom-center"); // 기본 위치
   const [duration, setDuration] = useState(5);
   const [fontSize, setFontSize] = useState(20);
   const [textColor, setTextColor] = useState("#FFFFFF");

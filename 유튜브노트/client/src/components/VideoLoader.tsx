@@ -49,6 +49,7 @@ const VideoLoader: React.FC<VideoLoaderProps> = ({
         try {
           const responseText = await response.text();
           console.error("서버 응답:", responseText);
+          console.error("응답 헤더:", Object.fromEntries(response.headers));
           
           if (responseText.trim()) {
             try {

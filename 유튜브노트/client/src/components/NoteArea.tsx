@@ -81,12 +81,9 @@ const NoteArea: React.FC<NoteAreaProps> = ({
   player,
   isPlayerReady,
   playerState,
-  availableRates = [],
   currentRate = 1,
   setCurrentRate,
   showNotification,
-  isKeyboardVisible = false,
-  keyboardHeight = 0,
   currentVideoId,
   currentVideoInfo,
   timestamps,
@@ -103,8 +100,6 @@ const NoteArea: React.FC<NoteAreaProps> = ({
 }) => {
   const [noteText, setNoteText] = useState("");
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
-  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [availableSessions, setAvailableSessions] = useState<any[]>([]);
   const [showSessionSelector, setShowSessionSelector] = useState(false);
   const [rightPanelMode, setRightPanelMode] = useState<"overlay" | "recording">("overlay"); // 우측 패널 모드
@@ -139,8 +134,6 @@ const NoteArea: React.FC<NoteAreaProps> = ({
   const controlRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   
-  // 사용된 타임스탬프 추적 (무한 루프 방지)
-  const [usedTimestamps, setUsedTimestamps] = useState<Set<number>>(new Set());
   const [autoJumpChain, setAutoJumpChain] = useState<number[]>([]); // 자동 점프 체인 추적
   
   // 타임스탬프 독점 실행 관리
@@ -150,8 +143,6 @@ const NoteArea: React.FC<NoteAreaProps> = ({
   const [userSeekedTime, setUserSeekedTime] = useState<number | null>(null); // 사용자가 임의로 클릭한 시간
   const [executedTimestampIds, setExecutedTimestampIds] = useState<number[]>([]); // 실행된 타임스탬프 ID 순서
   
-  // 다이얼 선택 상태
-  const [selectedDial, setSelectedDial] = useState<'volume' | 'speed' | 'duration'>('volume');
   
   // 영상 재시작 감지 - playerState 변화 감지
   useEffect(() => {
@@ -164,7 +155,7 @@ const NoteArea: React.FC<NoteAreaProps> = ({
       setActiveTimestampId(null);
       setTimestampStartMode(null);
       setNextAllowedTimestampIndex(0);
-      setUsedTimestamps(new Set());
+      // setUsedTimestamps(new Set()); // 제거됨
       setAutoJumpChain([]);
       console.log("영상 종료: 타임스탬프 실행 기록 초기화");
     }
@@ -178,7 +169,7 @@ const NoteArea: React.FC<NoteAreaProps> = ({
           setActiveTimestampId(null);
           setTimestampStartMode(null);
           setNextAllowedTimestampIndex(0);
-          setUsedTimestamps(new Set());
+          // setUsedTimestamps(new Set()); // 제거됨
           setAutoJumpChain([]);
           console.log("영상 재시작: 타임스탬프 실행 기록 초기화");
         }
@@ -270,12 +261,6 @@ const NoteArea: React.FC<NoteAreaProps> = ({
   };
 
   // 시간 포맷팅 함수
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60; // 소수점 포함
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
-  };
 
   // 정확한 종료시간 계산 (다음 타임스탬프 기준)
   const 정확한종료시간계산 = (현재시간: number, 타임스탬프목록: RawTimestamp[]): number => {
@@ -329,12 +314,6 @@ const NoteArea: React.FC<NoteAreaProps> = ({
       return acc;
     }, {} as Record<string, number>);
     
-    const 액션요약 = Object.entries(액션별개수)
-      .map(([action, count]) => {
-        const 이모지 = action === 'volume' ? '🔊' : action === 'speed' ? '⚡' : action === 'seek' ? '🔄' : action === 'pause' ? '⏸️' : '📍';
-        return `${이모지}${count}`;
-      })
-      .join(' ');
     
     // 텍스트창 호환 형태로 변경 (제목과 타임스탬프만 포함)
     let 노트텍스트 = `\n━━━ 📹 ${session.title} ━━━\n\n`;
@@ -569,6 +548,8 @@ const NoteArea: React.FC<NoteAreaProps> = ({
     if (currentIndex !== -1) {
       setNextAllowedTimestampIndex(currentIndex + 1);
     }
+    
+    showNotification(`${formatTime(timestamp.timeInSeconds)}로 점프`, "info");
   };
 
   // 영상 정보 저장 뮤테이션
@@ -619,55 +600,11 @@ const NoteArea: React.FC<NoteAreaProps> = ({
       return response.json();
     },
     onSuccess: () => {
-      setLastSaveTime(new Date());
-      setIsSaving(false);
+      // setLastSaveTime(new Date()); // 제거됨
+      // setIsSaving(false); // 제거됨
     },
   });
 
-  // 타임스탬프 생성 뮤테이션
-  const createTimestampMutation = useMutation({
-    mutationFn: async (timestampData: any) => {
-      const response = await fetch("/api/timestamps", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(timestampData),
-      });
-      return response.json();
-    },
-    onSuccess: (newTimestamp) => {
-      // 새 타임스탬프를 상위 컴포넌트 상태에 추가
-      setTimestamps(prev => [...prev, newTimestamp]);
-      queryClient.invalidateQueries({ queryKey: ['/api/timestamps'] });
-    },
-  });
-
-  // 타임스탬프 설정 업데이트 뮤테이션
-  const updateTimestampMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const response = await fetch(`/api/timestamps/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timestamps'] });
-    },
-  });
-
-  // 타임스탬프 삭제 뮤테이션
-  const deleteTimestampMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const response = await fetch(`/api/timestamps/${id}`, {
-        method: "DELETE",
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/timestamps'] });
-    },
-  });
 
   // 현재 세션의 타임스탬프들 조회
   const { data: sessionTimestamps } = useQuery({
@@ -800,7 +737,7 @@ const NoteArea: React.FC<NoteAreaProps> = ({
             setExecutedTimestampIds(executedIds);
             setActiveTimestampId(null);
             setTimestampStartMode(null);
-            setUsedTimestamps(new Set());
+            // setUsedTimestamps(new Set()); // 제거됨
             setAutoJumpChain([]);
           }
           isJumpSeek = false; // 리셋
@@ -1277,7 +1214,7 @@ const NoteArea: React.FC<NoteAreaProps> = ({
       checkExistingSession(currentVideoId);
       
       // 타임스탬프 추적 상태 초기화
-      setUsedTimestamps(new Set());
+      // setUsedTimestamps(new Set()); // 제거됨
       setAutoJumpChain([]);
       setActiveTimestampId(null);
       setTimestampStartMode(null);
@@ -1421,7 +1358,7 @@ const NoteArea: React.FC<NoteAreaProps> = ({
     // 저장하기 전에 속도값 정리
     const cleanedContent = cleanupSpeedInText(content);
     
-    setIsSaving(true);
+    // setIsSaving(true); // 제거됨
     updateSessionMutation.mutate({
       id: currentSessionId,
       data: { content: cleanedContent },
@@ -1596,10 +1533,37 @@ const NoteArea: React.FC<NoteAreaProps> = ({
       }
       
       const currentTime = player.getCurrentTime();
+      const newTimestampTime = currentTime; // 새로 추가될 타임스탬프 시간
       const timeFormatted = formatTime(currentTime);
       const endTime = currentTime + duration;
       const endTimeFormatted = formatTime(endTime);
       const timestamp = `[${timeFormatted}-${endTimeFormatted}, ${Math.round(volume || 100)}%, ${(playbackRate || 1.0).toFixed(2)}x]`;
+      
+      // 이전 시간대 타임스탬프 감지 로직
+      // 커서 직전 타임스탬프와 비교하여 시간 순서 역순인지 확인
+      let 이전시간대여부 = false;
+      
+      if (textareaRef.current) {
+        const 커서위치 = textareaRef.current.selectionStart;
+        const 커서이전텍스트 = noteText.substring(0, 커서위치);
+        
+        // 커서 이전 텍스트에서 가장 마지막 타임스탬프 찾기
+        const 타임스탬프정규식 = /\[(\d{1,2}):(\d{2}):(\d{1,2}(?:\.\d{1,3})?)-(\d{1,2}):(\d{2}):(\d{1,2}(?:\.\d{1,3})?),\s*(\d+)%,\s*([\d.]+)x(?:,\s*(->|\|\d+))?\]/g;
+        let 마지막매치 = null;
+        let 매치결과;
+        
+        while ((매치결과 = 타임스탬프정규식.exec(커서이전텍스트)) !== null) {
+          마지막매치 = 매치결과;
+        }
+        
+        if (마지막매치) {
+          // 직전 타임스탬프의 시작 시간 계산
+          const 직전시간 = parseInt(마지막매치[1]) * 3600 + parseInt(마지막매치[2]) * 60 + parseFloat(마지막매치[3]);
+          이전시간대여부 = newTimestampTime < 직전시간;
+          
+          console.log(`커서 직전 타임스탬프: ${직전시간}초, 새 타임스탬프: ${newTimestampTime}초, 이전시간대여부: ${이전시간대여부}`);
+        }
+      }
       
       // 스크린샷 캡처
       // 스크린샷 캡처는 나중에 필요시 추가 가능
@@ -1628,14 +1592,55 @@ const NoteArea: React.FC<NoteAreaProps> = ({
         setTimeout(() => {
           saveNote(newText);
         }, 100);
+        
+        // 이전 시간대 타임스탬프인 경우 직전 타임스탬프에 -> 표시 추가
+        if (이전시간대여부) {
+          // 직전 타임스탬프에 -> 추가하기 위해 텍스트 수정
+          const 커서위치 = textareaRef.current.selectionStart;
+          const 커서이전텍스트 = noteText.substring(0, 커서위치);
+          const 커서이후텍스트 = noteText.substring(textarea.selectionEnd);
+          
+          // 직전 타임스탬프 찾아서 -> 추가
+          const 타임스탬프정규식 = /\[(\d{1,2}):(\d{2}):(\d{1,2}(?:\.\d{1,3})?)-(\d{1,2}):(\d{2}):(\d{1,2}(?:\.\d{1,3})?),\s*(\d+)%,\s*([\d.]+)x(?:,\s*(->|\|\d+))?\]/g;
+          let 수정된커서이전텍스트 = 커서이전텍스트;
+          let 마지막매치 = null;
+          let 마지막매치위치 = -1;
+          let 매치결과;
+          
+          while ((매치결과 = 타임스탬프정규식.exec(커서이전텍스트)) !== null) {
+            마지막매치 = 매치결과;
+            마지막매치위치 = 매치결과.index;
+          }
+          
+          if (마지막매치 && 마지막매치위치 >= 0) {
+            // 기존 타임스탬프를 -> 포함한 형태로 교체 (쉼표 포함)
+            const 기존타임스탬프 = 마지막매치[0];
+            const 새로운타임스탬프 = 기존타임스탬프.replace(/\]$/, ', ->]');
+            
+            수정된커서이전텍스트 = 커서이전텍스트.substring(0, 마지막매치위치) + 
+                                 새로운타임스탬프 + 
+                                 커서이전텍스트.substring(마지막매치위치 + 기존타임스탬프.length);
+          }
+          
+          // 전체 텍스트 재구성 (직전 타임스탬프 수정 + 새 타임스탬프 추가)
+          const 최종텍스트 = 수정된커서이전텍스트 + timestamp + " " + "\n" + 커서이후텍스트;
+          setNoteText(최종텍스트);
+          
+          // 저장
+          setTimeout(() => {
+            saveNote(최종텍스트);
+          }, 100);
+          
+          showNotification(`이전 시간대 타임스탬프 추가 - 직전 타임스탬프에 -> 표시됨`, "info");
+        } else {
+          showNotification(`타임스탬프 추가: ${timeFormatted}`, "success");
+        }
       }
 
       // 녹화 중이면 수동 타임스탬프도 추가
       if (녹화중) {
         수동타임스탬프추가();
       }
-
-      //showNotification("타임스탬프가 추가되었습니다!", "success");
     } catch (error) {
       console.error("타임스탬프 추가 중 오류:", error);
       showNotification("타임스탬프 추가 중 오류가 발생했습니다.", "error");
@@ -1701,7 +1706,7 @@ const NoteArea: React.FC<NoteAreaProps> = ({
           }
           
           // 사용자 직접 클릭 시 추적 기록 초기화
-          setUsedTimestamps(new Set());
+          // setUsedTimestamps(new Set()); // 제거됨
           setAutoJumpChain([]);
           setExecutedTimestampIds([]); // 실행 기록 초기화
           

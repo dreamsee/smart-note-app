@@ -21,3 +21,13 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# 문서 파일들 (GitHub에서 제외, 로컬에는 유지)
+*.md
+!README.md
+*.sql
+*.html
+참고자료/
+github-push-guide.md
+vercel-deployment-guide.md
+초보자를_위한_git_사용법.md

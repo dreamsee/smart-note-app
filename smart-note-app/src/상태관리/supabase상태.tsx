@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 폴더타입, 노트타입, 폴더설정타입, 채팅메시지타입 } from '../타입';
 import { 데이터베이스 } from '../서비스/데이터베이스서비스';
+import { 최적화된데이터베이스 } from '../서비스/최적화된데이터베이스서비스';
+import { 타입드supabase } from '../서비스/supabase';
+import { RealtimeChannel } from '@supabase/supabase-js';
+import { 기본폴더설정생성하기 } from '../유틸리티/설정유틸리티';
 
 // Context 타입 정의
 interface Supabase상태컨텍스트타입 {
@@ -10,6 +14,7 @@ interface Supabase상태컨텍스트타입 {
   활성노트: 노트타입 | null;
   로딩중: boolean;
   에러: string | null;
+  오프라인모드: boolean;
   
   // 폴더 관련 함수들
   폴더선택하기: (폴더아이디: string) => void;
@@ -25,7 +30,7 @@ interface Supabase상태컨텍스트타입 {
   노트업데이트하기: (노트아이디: string, 업데이트내용: Partial<노트타입>) => Promise<void>;
   
   // 채팅 메시지 관련 함수들
-  새메시지추가하기: (노트아이디: string, 메시지텍스트: string, 옵션?: { category?: string; author?: string; 부모메시지아이디?: string }) => Promise<void>;
+  새메시지추가하기: (노트아이디: string, 메시지텍스트: string, 옵션?: { category?: string; author?: string; 말풍선위치?: '왼쪽' | '오른쪽'; 부모메시지아이디?: string }) => Promise<void>;
   
   // 데이터 관리 함수들
   데이터새로고침하기: () => Promise<void>;
@@ -81,11 +86,146 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
   const [활성노트, 활성노트설정] = useState<노트타입 | null>(null);
   const [로딩중, 로딩중설정] = useState(true);
   const [에러, 에러설정] = useState<string | null>(null);
+  const [실시간채널, 실시간채널설정] = useState<RealtimeChannel | null>(null);
+  const [오프라인모드, 오프라인모드설정] = useState(false);
 
-  // 초기 데이터 로드
+  // 초기 데이터 로드 및 실시간 구독 설정
   useEffect(() => {
     데이터새로고침하기();
+    실시간구독설정하기();
+    온라인상태감지설정하기();
+
+    // 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      실시간구독해제하기();
+      온라인상태감지해제하기();
+    };
   }, []);
+
+  // 온라인/오프라인 상태 감지
+  const 온라인상태감지설정하기 = () => {
+    const 온라인처리 = () => {
+      console.log('온라인 모드로 전환');
+      오프라인모드설정(false);
+      에러설정(null);
+      // 온라인 복귀 시 데이터 동기화
+      백그라운드동기화하기();
+    };
+
+    const 오프라인처리 = () => {
+      console.log('오프라인 모드로 전환');
+      오프라인모드설정(true);
+      에러설정('인터넷 연결이 끊어졌습니다. 오프라인 모드로 동작합니다.');
+    };
+
+    window.addEventListener('online', 온라인처리);
+    window.addEventListener('offline', 오프라인처리);
+
+    // 초기 상태 설정
+    오프라인모드설정(!navigator.onLine);
+  };
+
+  const 온라인상태감지해제하기 = () => {
+    window.removeEventListener('online', () => {});
+    window.removeEventListener('offline', () => {});
+  };
+
+  // 로컬 캐시에 데이터 저장
+  const 로컬캐시저장하기 = (데이터: 폴더타입[]) => {
+    try {
+      const 캐시데이터 = {
+        폴더목록: 데이터,
+        저장시간: new Date().toISOString()
+      };
+      localStorage.setItem('supabase-cache', JSON.stringify(캐시데이터));
+      console.log('로컬 캐시 저장 완료');
+    } catch (오류) {
+      console.error('로컬 캐시 저장 실패:', 오류);
+    }
+  };
+
+  // 로컬 캐시에서 데이터 불러오기
+  const 로컬캐시불러오기 = (): 폴더타입[] | null => {
+    try {
+      const 캐시문자열 = localStorage.getItem('supabase-cache');
+      if (캐시문자열) {
+        const 캐시데이터 = JSON.parse(캐시문자열);
+        
+        // 데이터 타입 변환
+        const 변환된데이터 = 캐시데이터.폴더목록.map((폴더: any) => ({
+          ...폴더,
+          노트목록: 폴더.노트목록.map((노트: any) => ({
+            ...노트,
+            생성시간: new Date(노트.생성시간),
+            수정시간: new Date(노트.수정시간),
+            채팅메시지목록: 노트.채팅메시지목록.map((메시지: any) => ({
+              ...메시지,
+              타임스탬프: new Date(메시지.타임스탬프),
+              하위메시지목록: 메시지.하위메시지목록 ? 메시지.하위메시지목록.map((하위메시지: any) => ({
+                ...하위메시지,
+                타임스탬프: new Date(하위메시지.타임스탬프)
+              })) : []
+            }))
+          }))
+        }));
+
+        console.log('로컬 캐시 불러오기 완료 (저장시간:', 캐시데이터.저장시간, ')');
+        return 변환된데이터;
+      }
+    } catch (오류) {
+      console.error('로컬 캐시 불러오기 실패:', 오류);
+    }
+    return null;
+  };
+
+  // 실시간 구독 설정
+  const 실시간구독설정하기 = () => {
+    try {
+      const 채널 = 타입드supabase
+        .channel('데이터베이스-변경')
+        .on(
+          'postgres_changes',  
+          { event: '*', schema: 'public', table: '폴더목록' },
+          (payload) => {
+            console.log('폴더 변경 감지:', payload);
+            백그라운드동기화하기();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: '노트목록' },
+          (payload) => {
+            console.log('노트 변경 감지:', payload);
+            백그라운드동기화하기();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: '채팅메시지목록' },
+          (payload) => {
+            console.log('메시지 변경 감지:', payload);
+            백그라운드동기화하기();
+          }
+        )
+        .subscribe((status) => {
+          console.log('실시간 구독 상태:', status);
+        });
+
+      실시간채널설정(채널);
+      console.log('실시간 구독 설정 완료');
+    } catch (오류) {
+      console.error('실시간 구독 설정 실패:', 오류);
+    }
+  };
+
+  // 실시간 구독 해제
+  const 실시간구독해제하기 = () => {
+    if (실시간채널) {
+      타입드supabase.removeChannel(실시간채널);
+      실시간채널설정(null);
+      console.log('실시간 구독 해제됨');
+    }
+  };
 
   // 데이터 새로고침 (로딩 화면 표시)
   const 데이터새로고침하기 = async () => {
@@ -93,7 +233,40 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
       로딩중설정(true);
       에러설정(null);
       
-      const 폴더데이터 = await 데이터베이스.폴더목록가져오기();
+      let 폴더데이터: 폴더타입[] = [];
+
+      if (오프라인모드) {
+        // 오프라인 모드: 로컬 캐시에서 불러오기
+        const 캐시데이터 = 로컬캐시불러오기();
+        if (캐시데이터) {
+          폴더데이터 = 캐시데이터;
+          console.log('오프라인 모드: 로컬 캐시에서 데이터 로드');
+        } else {
+          에러설정('오프라인 상태이고 로컬 캐시가 없습니다.');
+        }
+      } else {
+        // 온라인 모드: 최적화된 Supabase 로딩
+        try {
+          console.time('⚡ 최적화된 데이터 로딩');
+          폴더데이터 = await 최적화된데이터베이스.폴더목록가져오기();
+          console.timeEnd('⚡ 최적화된 데이터 로딩');
+          
+          // 성공적으로 불러온 경우 로컬 캐시에 저장
+          로컬캐시저장하기(폴더데이터);
+          console.log('✅ 최적화된 로딩: 1회 JOIN 쿼리로 전체 데이터 로드 완료');
+        } catch (서버오류) {
+          // 서버 연결 실패 시 로컬 캐시 사용
+          console.warn('서버 연결 실패, 로컬 캐시 사용:', 서버오류);
+          const 캐시데이터 = 로컬캐시불러오기();
+          if (캐시데이터) {
+            폴더데이터 = 캐시데이터;
+            에러설정('서버 연결에 실패했습니다. 로컬 캐시 데이터를 사용합니다.');
+          } else {
+            throw 서버오류;
+          }
+        }
+      }
+
       폴더목록설정(폴더데이터);
 
       // 활성 상태 복원
@@ -117,7 +290,7 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
         활성노트설정(폴더데이터[0].노트목록[0] || null);
       }
 
-      console.log('Supabase 데이터 로드 완료');
+      console.log('데이터 로드 완료');
     } catch (오류) {
       console.error('데이터 로드 실패:', 오류);
       에러설정('데이터를 불러오는데 실패했습니다.');
@@ -130,7 +303,17 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
   const 백그라운드동기화하기 = async () => {
     try {
       에러설정(null);
-      const 폴더데이터 = await 데이터베이스.폴더목록가져오기();
+      
+      // 오프라인 모드에서는 백그라운드 동기화 하지 않음
+      if (오프라인모드) {
+        console.log('오프라인 모드: 백그라운드 동기화 건너뜀');
+        return;
+      }
+
+      const 폴더데이터 = await 최적화된데이터베이스.캐시된폴더목록가져오기();
+      
+      // 성공적으로 불러온 경우 로컬 캐시 업데이트
+      로컬캐시저장하기(폴더데이터);
       
       // 현재 활성 상태를 유지하면서 데이터만 업데이트
       const 현재활성폴더아이디 = 활성폴더?.아이디;
@@ -205,13 +388,13 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
     }
   }, [활성노트]);
 
-  // 폴더 선택
+  // 폴더 선택 (원래 설계: 폴더 선택 시 통합뷰 표시)
   const 폴더선택하기 = (폴더아이디: string) => {
     const 선택된폴더 = 폴더목록.find(폴더 => 폴더.아이디 === 폴더아이디);
     if (선택된폴더) {
       활성폴더설정(선택된폴더);
-      활성노트설정(선택된폴더.노트목록[0] || null);
-      console.log('폴더 선택됨:', 선택된폴더.이름);
+      활성노트설정(null); // 폴더 선택 시 개별 노트 선택하지 않음 (폴더 통합뷰 표시)
+      console.log('폴더 선택됨 (통합뷰):', 선택된폴더.이름);
     }
   };
 
@@ -220,11 +403,7 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
     try {
       로딩중설정(true);
       
-      const 기본설정: 폴더설정타입 = {
-        시간표시여부: true,
-        입력방식: '단순채팅',
-        하위입력활성화: false,
-      };
+      const 기본설정: 폴더설정타입 = 기본폴더설정생성하기();
       
       await 데이터베이스.폴더생성하기(폴더이름, 기본설정);
       await 백그라운드동기화하기();
@@ -451,7 +630,7 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
   const 새메시지추가하기 = async (
     노트아이디: string, 
     메시지텍스트: string, 
-    옵션?: { category?: string; author?: string; 부모메시지아이디?: string }
+    옵션?: { category?: string; author?: string; 말풍선위치?: '왼쪽' | '오른쪽'; 부모메시지아이디?: string }
   ) => {
     // 1. 즉시 로컬 상태 업데이트 (낙관적 업데이트)
     const 임시메시지아이디 = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -461,6 +640,7 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
       타임스탬프: new Date(),
       카테고리: 옵션?.category,
       작성자: 옵션?.author,
+      말풍선위치: 옵션?.말풍선위치,
       하위메시지목록: []
     };
 
@@ -556,6 +736,7 @@ export const Supabase상태제공자: React.FC<Supabase상태제공자속성> = 
     활성노트,
     로딩중,
     에러,
+    오프라인모드,
     폴더선택하기,
     새폴더생성하기,
     폴더삭제하기,

@@ -5,8 +5,10 @@ import { youtubeSearchResponseSchema, insertVideoSchema, insertNoteSessionSchema
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 
-// 환경 변수 로드
+// 환경 변수 로드 - 여러 경로 시도
 dotenv.config({ path: "../.env" });
+dotenv.config({ path: "./.env" });
+dotenv.config(); // 기본 경로
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // 환경 변수에서 YouTube API 키 가져오기
@@ -96,9 +98,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ videos });
     } catch (error) {
       console.error("YouTube 검색 에러:", error);
+      console.error("에러 스택:", error instanceof Error ? error.stack : error);
       return res.status(500).json({ 
         message: "서버 오류가 발생했습니다.",
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined
       });
     }
   });

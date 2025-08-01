@@ -18,6 +18,26 @@ export interface 배치정보타입 {
   공격범위내: boolean;
 }
 
+// 클래스 관련 타입
+export type 클래스타입 = '전사' | '마법사' | '궁수' | '도적' | '기사' | '전체';
+
+// 조합 관련 타입
+export interface 조합재료타입 {
+  아이디: string;
+  수량: number;
+}
+
+export interface 조합레시피타입 {
+  아이디: string;
+  이름: string;
+  결과아이템아이디?: string;
+  결과스킬아이디?: string;
+  필요재료: 조합재료타입[];
+  조합비용: number;
+  필요클래스: 클래스타입[];
+  설명?: string;
+}
+
 // 캐릭터 관련 타입
 export interface 캐릭터타입 {
   아이디: string;
@@ -28,7 +48,7 @@ export interface 캐릭터타입 {
   방어력: number;
   속도: number;
   특수능력?: string[];
-  클래스: string;
+  클래스: 클래스타입;
   등급: '일반' | '희귀' | '영웅' | '전설';
   설명?: string;
   위치?: 위치타입;
@@ -51,19 +71,27 @@ export interface 아이템타입 {
   };
   가격: number;
   설명?: string;
+  사용가능클래스: 클래스타입[];
+  재료여부: boolean;
+  조합으로생성됨?: boolean;
+  조합레시피아이디?: string;
 }
 
 // 스킬 관련 타입
 export interface 스킬타입 {
   아이디: string;
   이름: string;
-  종류: '공격' | '방어' | '버프' | '디버프' | '치유';
+  종류: '공격' | '방어' | '버프' | '디버프' | '치유' | '재료';
   데미지: number;
   쿨다운: number;
   마나소비: number;
   사거리: number;
   효과범위: '단일' | '광역';
   설명?: string;
+  사용가능클래스: 클래스타입[];
+  재료여부: boolean;
+  조합으로생성됨?: boolean;
+  조합레시피아이디?: string;
 }
 
 // 전투 시뮬레이션 타입
@@ -146,4 +174,31 @@ export interface 배치전투로그 {
   데미지?: number;
   효과?: string;
   결과설명: string;
+}
+
+// 프로파일 시스템 타입
+export type 프로파일뷰타입 = '상세' | '간단' | 'RPG스타일' | '카드형' | '통계';
+
+export interface 캐릭터상세능력치타입 {
+  체력: { 현재: number; 최대: number };
+  마나: { 현재: number; 최대: number };
+  공격력: number;
+  방어력: number;
+  치명타율: number;
+  치명타피해: number;
+  적중률: number;
+  회피율: number;
+  속도: number;
+  저항력: number;
+}
+
+export interface 캐릭터상세정보타입 extends 캐릭터타입 {
+  직업: string;
+  장비: string[];
+  스킬: {
+    이름: string;
+    설명: string;
+    쿨다운?: string;
+  }[];
+  상세능력치: 캐릭터상세능력치타입;
 }

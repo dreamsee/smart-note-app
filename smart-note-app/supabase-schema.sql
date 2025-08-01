@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS 채팅메시지목록 (
     텍스트 TEXT NOT NULL,
     작성자 VARCHAR(100), -- 대화형 입력용
     카테고리 VARCHAR(100), -- 카테고리형 입력용
+    말풍선위치 VARCHAR(10), -- 대화형 입력에서 개별 메시지 위치 ('왼쪽' 또는 '오른쪽')
     타임스탬프 TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

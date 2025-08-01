@@ -80,13 +80,35 @@
   padding: 8px 12px;
   background-color: #f0f0f0;
   border-radius: 8px;
-  max-width: 80%;
+  max-width: 100%;
+  display: flex;
+  align-items: flex-start;
 }
 
 .채팅메시지-시간 {
-  font-size: 12px;
+  font-size: 10px;
+  color: #999;
+  cursor: help;
+  position: relative;
+  transition: color 0.2s ease;
+  text-align: right;
+  min-width: 40px;
+  white-space: pre-line;
+}
+
+.채팅메시지-시간:hover {
   color: #666;
-  margin-bottom: 4px;
+}
+
+/* 클릭 가능한 시간 표시 스타일 */
+.채팅메시지-시간[data-clickable="true"] {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.채팅메시지-시간[data-clickable="true"]:hover {
+  color: #007bff;
+  transform: scale(1.05);
 }
 
 .채팅메시지-텍스트 {

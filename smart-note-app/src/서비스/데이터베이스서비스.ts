@@ -60,6 +60,7 @@ export class 데이터베이스서비스 {
               타임스탬프: new Date(하위메시지.타임스탬프),
               작성자: 하위메시지.작성자 || undefined,
               카테고리: 하위메시지.카테고리 || undefined,
+              말풍선위치: (하위메시지 as any).말풍선위치 as '왼쪽' | '오른쪽' || undefined,
               하위메시지목록: []
             }));
 
@@ -69,6 +70,7 @@ export class 데이터베이스서비스 {
               타임스탬프: new Date(메시지.타임스탬프),
               작성자: 메시지.작성자 || undefined,
               카테고리: 메시지.카테고리 || undefined,
+              말풍선위치: (메시지 as any).말풍선위치 as '왼쪽' | '오른쪽' || undefined,
               하위메시지목록: 하위메시지목록
             });
           }
@@ -79,6 +81,7 @@ export class 데이터베이스서비스 {
             내용: 노트.내용,
             요약: 노트.요약 || undefined,
             태그목록: 노트.태그목록 || undefined,
+            노트설정: (노트 as any).노트설정 || undefined,
             채팅메시지목록: 채팅메시지목록,
             생성시간: new Date(노트.생성시간),
             수정시간: new Date(노트.수정시간)
@@ -221,6 +224,7 @@ export class 데이터베이스서비스 {
       if (업데이트내용.내용 !== undefined) 업데이트데이터.내용 = 업데이트내용.내용;
       if (업데이트내용.요약 !== undefined) 업데이트데이터.요약 = 업데이트내용.요약;
       if (업데이트내용.태그목록 !== undefined) 업데이트데이터.태그목록 = 업데이트내용.태그목록;
+      if (업데이트내용.노트설정 !== undefined) 업데이트데이터.노트설정 = 업데이트내용.노트설정;
 
       const { error } = await 타입드supabase
         .from('노트목록')
@@ -241,7 +245,7 @@ export class 데이터베이스서비스 {
   async 메시지추가하기(
     노트아이디: string, 
     메시지텍스트: string, 
-    옵션?: { category?: string; author?: string; 부모메시지아이디?: string }
+    옵션?: { category?: string; author?: string; 말풍선위치?: '왼쪽' | '오른쪽'; 부모메시지아이디?: string }
   ): Promise<string> {
     try {
       const { data, error } = await 타입드supabase
@@ -251,7 +255,8 @@ export class 데이터베이스서비스 {
           부모메시지아이디: 옵션?.부모메시지아이디 || null,
           텍스트: 메시지텍스트,
           작성자: 옵션?.author || null,
-          카테고리: 옵션?.category || null
+          카테고리: 옵션?.category || null,
+          말풍선위치: 옵션?.말풍선위치 || null
         })
         .select()
         .single();
@@ -291,7 +296,8 @@ export class 데이터베이스서비스 {
           for (const 메시지 of 노트.채팅메시지목록) {
             const 새메시지아이디 = await this.메시지추가하기(새노트아이디, 메시지.텍스트, {
               category: 메시지.카테고리,
-              author: 메시지.작성자
+              author: 메시지.작성자,
+              말풍선위치: 메시지.말풍선위치
             });
 
             // 하위 메시지들 추가
@@ -300,6 +306,7 @@ export class 데이터베이스서비스 {
                 await this.메시지추가하기(새노트아이디, 하위메시지.텍스트, {
                   category: 하위메시지.카테고리,
                   author: 하위메시지.작성자,
+                  말풍선위치: 하위메시지.말풍선위치,
                   부모메시지아이디: 새메시지아이디
                 });
               }

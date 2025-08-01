@@ -220,5 +220,16 @@ export class MemStorage implements IStorage {
   }
 }
 
-// 단일 인스턴스 내보내기
+// PostgreSQL 데이터베이스 스토리지 구현 (일시적으로 주석 처리)
+// import { db } from "./db";
+// import { eq, and } from "drizzle-orm";
+
+/*
+PostgreSQL 구현은 drizzle-orm 설치 후 활성화 예정
+export class PostgreSQLStorage implements IStorage {
+  // 구현 코드 생략...
+}
+*/
+
+// 단일 인스턴스 내보내기 (임시로 메모리 스토리지만 사용)
 export const storage = new MemStorage();

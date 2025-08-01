@@ -137,3 +137,54 @@ export const youtubeSearchResponseSchema = z.object({
 
 export type YoutubeVideo = z.infer<typeof youtubeVideoSchema>;
 export type YoutubeSearchResponse = z.infer<typeof youtubeSearchResponseSchema>;
+
+// 녹화 세션 테이블 (휘발성 문제 해결)
+export const recordingSessions = pgTable("recording_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  videoId: text("video_id").references(() => videos.videoId).notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("active"), // active, completed, cancelled
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  totalDuration: integer("total_duration").default(0), // 녹화 총 시간 (초)
+  rawTimestamps: integer("raw_timestamps_count").default(0), // 생성된 타임스탬프 수
+  metadata: text("metadata"), // JSON 형태 추가 정보
+});
+
+// 원시 타임스탬프 테이블 (녹화 중 생성된 데이터)
+export const rawTimestamps = pgTable("raw_timestamps", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => recordingSessions.id).notNull(),
+  timestampId: text("timestamp_id").notNull(), // 클라이언트에서 생성한 ID
+  timeInSeconds: doublePrecision("time_in_seconds").notNull(), // 정확한 시간 (소수점 포함)
+  action: text("action").notNull(), // speed, volume, seek, pause, manual
+  value: doublePrecision("value").notNull(), // 변경된 값
+  previousValue: doublePrecision("previous_value").notNull(), // 이전 값
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertRecordingSessionSchema = createInsertSchema(recordingSessions).pick({
+  userId: true,
+  videoId: true,
+  title: true,
+  status: true,
+  totalDuration: true,
+  rawTimestamps: true,
+  metadata: true,
+});
+
+export const insertRawTimestampSchema = createInsertSchema(rawTimestamps).pick({
+  sessionId: true,
+  timestampId: true,
+  timeInSeconds: true,
+  action: true,
+  value: true,
+  previousValue: true,
+});
+
+export type InsertRecordingSession = z.infer<typeof insertRecordingSessionSchema>;
+export type RecordingSession = typeof recordingSessions.$inferSelect;
+
+export type InsertRawTimestamp = z.infer<typeof insertRawTimestampSchema>;
+export type RawTimestamp = typeof rawTimestamps.$inferSelect;

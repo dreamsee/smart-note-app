@@ -5,6 +5,7 @@ import 노트패널 from './컴포넌트/노트패널';
 import 폴더목록컴포넌트 from './컴포넌트/폴더목록';
 import 설정패널 from './컴포넌트/설정패널';
 import { Supabase상태제공자, Supabase상태사용하기 } from './상태관리/supabase상태';
+import { 앱상태제공자 } from './상태관리/앱상태';
 import { 태그필터상태제공자 } from './상태관리/태그필터상태';
 
 // 로딩 상태를 보여주는 컴포넌트
@@ -196,7 +197,9 @@ const 메인앱: React.FC = () => {
 function App() {
   return (
     <Supabase상태제공자>
-      <메인앱 />
+      <앱상태제공자>
+        <메인앱 />
+      </앱상태제공자>
     </Supabase상태제공자>
   );
 }

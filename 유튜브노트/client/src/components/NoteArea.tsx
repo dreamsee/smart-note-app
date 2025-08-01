@@ -549,7 +549,10 @@ const NoteArea: React.FC<NoteAreaProps> = ({
       setNextAllowedTimestampIndex(currentIndex + 1);
     }
     
-    showNotification(`${formatTime(timestamp.timeInSeconds)}로 점프`, "info");
+    // 진행 상황 표시 (점프 실행)
+    const totalTimestamps = priorityOrder.length;
+    const currentPosition = currentIndex !== -1 ? currentIndex + 1 : '?';
+    showNotification(`타임스탬프 점프 (${currentPosition}/${totalTimestamps}) ${formatTime(timestamp.timeInSeconds)}`, "info");
   };
 
   // 영상 정보 저장 뮤테이션
@@ -864,6 +867,11 @@ const NoteArea: React.FC<NoteAreaProps> = ({
                 Math.abs(item.playbackRate - (candidate.playbackRate || 1.0)) < 0.01
               );
               
+              // 진행 상황 표시 (현재/전체)
+              const totalTimestamps = priorityOrder.length;
+              const currentPosition = candidateIndex + 1;
+              showNotification(`타임스탬프 실행 (${currentPosition}/${totalTimestamps}) ${formatTime(candidate.timeInSeconds)}`, "info");
+              
               // 이전 타임스탬프들을 모두 실행된 것으로 표시 (배타적 실행 보장)
               if (candidateIndex > 0) {
                 const previousIds: number[] = [];
@@ -945,6 +953,11 @@ const NoteArea: React.FC<NoteAreaProps> = ({
                 setActiveTimestampId(nextTarget.id);
                 setTimestampStartMode('jump');
                 
+                // 진행 상황 표시 (-> 자동 점프)
+                const totalTimestamps = priorityOrder.length;
+                const nextPosition = currentIndex + 2; // 다음 타임스탬프로 점프
+                showNotification(`타임스탬프 자동점프 (${nextPosition}/${totalTimestamps}) ${formatTime(nextTarget.timeInSeconds)}`, "info");
+                
                 // 이전 타임스탬프들을 모두 실행된 것으로 표시
                 const nextIndex = priorityOrder.findIndex(item => 
                   Math.abs(item.startTime - nextTarget.timeInSeconds) < 1
@@ -974,7 +987,9 @@ const NoteArea: React.FC<NoteAreaProps> = ({
                 // 점프 후 다음 설정 즉시 적용
                 activeNow = [nextTarget];
                 
-                showNotification(`${formatTime(nextTarget.timeInSeconds)}로 자동 이동`, "info");
+                // 진행 상황 표시 (-> 자동 점프 - 점프 완료)
+                const jumpedPosition = currentIndex + 2; // 다음 타임스탬프로 점프 완료
+                showNotification(`자동점프 완료 (${jumpedPosition}/${totalTimestamps}) ${formatTime(nextTarget.timeInSeconds)}`, "info");
               } else {
                 // 다음 타임스탬프를 찾을 수 없는 경우 - 기본 설정으로 복원
                 player.setVolume(defaultVolume);
@@ -1695,13 +1710,15 @@ const NoteArea: React.FC<NoteAreaProps> = ({
           const commaIndex = timestampText.indexOf(',');
           
           let targetTime = startSeconds; // 기본값은 시작 시간
+          let isEndTimeClick = false; // 끝나는 시간 클릭 여부
           
           // 클릭 위치 계산 (대략적)
           if (clickedMatch && clickedMatch.index !== undefined) {
             const relativePosition = clickPosition - clickedMatch.index;
             if (relativePosition > dashIndex && relativePosition < commaIndex) {
-              // 종료 시간 부분을 클릭한 경우
-              targetTime = endSeconds;
+              // 종료 시간 부분을 클릭한 경우 - 1초 전으로 이동 (해당 타임스탬프 구간 내 유지)
+              targetTime = Math.max(startSeconds, endSeconds - 0.3);
+              isEndTimeClick = true;
             }
           }
           
@@ -1732,10 +1749,48 @@ const NoteArea: React.FC<NoteAreaProps> = ({
             if (currentIndex !== -1) {
               setNextAllowedTimestampIndex(currentIndex + 1);
             }
+            
+            // 진행 상황 표시 (점프 실행)
+            const totalTimestamps = priorityOrder.length;
+            const currentPosition = currentIndex !== -1 ? currentIndex + 1 : '?';
+            showNotification(`타임스탬프 점프 (${currentPosition}/${totalTimestamps}) ${formatTime(startSeconds)}`, "info");
+            
+            // 끝나는 시간 클릭 + -> 모드인 경우 자동 점프 실행
+            if (isEndTimeClick) {
+              const currentTimestampFromOrder = priorityOrder.find(ts => 
+                Math.abs(ts.startTime - startSeconds) < 1
+              );
+              
+              if (currentTimestampFromOrder && currentTimestampFromOrder.jumpMode === 'jump') {
+                const currentIndexInOrder = priorityOrder.findIndex(ts => ts === currentTimestampFromOrder);
+                if (currentIndexInOrder !== -1 && currentIndexInOrder + 1 < priorityOrder.length) {
+                  const nextTimestamp = priorityOrder[currentIndexInOrder + 1];
+                  const nextTarget = timestamps.find(ts => 
+                    Math.abs(ts.timeInSeconds - nextTimestamp.startTime) < 1 &&
+                    Math.abs((ts.volume || 100) - nextTimestamp.volume) < 1 &&
+                    Math.abs((ts.playbackRate || 1.0) - nextTimestamp.playbackRate) < 0.01
+                  );
+                  
+                  if (nextTarget) {
+                    // 다음 타임스탬프로 자동 점프
+                    player.seekTo(nextTarget.timeInSeconds, true);
+                    setActiveTimestampId(nextTarget.id);
+                    setTimestampStartMode('jump');
+                    
+                    // 진행 상황 표시
+                    const nextPosition = currentIndexInOrder + 2;
+                    showNotification(`자동점프 (${nextPosition}/${totalTimestamps}) ${formatTime(nextTarget.timeInSeconds)}`, "info");
+                  }
+                }
+              }
+            }
           } else {
             // DB에 없으면 독점 모드 해제
             setActiveTimestampId(null);
             setTimestampStartMode(null);
+            
+            // DB에 없는 타임스탬프도 점프 알림 표시
+            showNotification(`${formatTime(targetTime)}로 점프`, "info");
           }
           
           // 텍스트 기반 동기화로 DB 업데이트는 자동으로 처리됨
@@ -1747,10 +1802,6 @@ const NoteArea: React.FC<NoteAreaProps> = ({
             player.setVolume(newVolume);
             player.setPlaybackRate(newSpeed);
           }
-          
-          const targetMinutes = Math.floor(targetTime / 60);
-          const targetSeconds = (targetTime % 60).toString().padStart(2, '0');
-          //showNotification(`${targetMinutes}:${targetSeconds}로 이동했습니다.`, "success");
         }
       } catch (error) {
         console.error("타임스탬프 이동 중 오류:", error);

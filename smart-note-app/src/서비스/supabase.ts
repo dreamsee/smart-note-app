@@ -46,6 +46,7 @@ export interface 데이터베이스타입 {
           내용: string
           요약?: string
           태그목록?: string[]
+          노트설정?: any // JSON 타입
           생성시간: string
           수정시간: string
         }
@@ -56,6 +57,7 @@ export interface 데이터베이스타입 {
           내용?: string
           요약?: string
           태그목록?: string[]
+          노트설정?: any
           생성시간?: string
           수정시간?: string
         }
@@ -66,6 +68,7 @@ export interface 데이터베이스타입 {
           내용?: string
           요약?: string
           태그목록?: string[]
+          노트설정?: any
           생성시간?: string
           수정시간?: string
         }
@@ -78,6 +81,7 @@ export interface 데이터베이스타입 {
           텍스트: string
           작성자?: string
           카테고리?: string
+          말풍선위치?: string
           타임스탬프: string
         }
         Insert: {
@@ -87,6 +91,7 @@ export interface 데이터베이스타입 {
           텍스트: string
           작성자?: string
           카테고리?: string
+          말풍선위치?: string
           타임스탬프?: string
         }
         Update: {
@@ -96,6 +101,7 @@ export interface 데이터베이스타입 {
           텍스트?: string
           작성자?: string
           카테고리?: string
+          말풍선위치?: string
           타임스탬프?: string
         }
       }

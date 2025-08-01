@@ -6,9 +6,14 @@ const 설정패널: React.FC = () => {
   const { 
     localStorage마이그레이션하기, 
     로딩중, 
-    폴더목록
+    폴더목록,
+    오프라인모드
   } = Supabase상태사용하기();
   const [패널열림, 패널열림설정] = useState(false);
+  const [마이그레이션완료됨, 마이그레이션완료됨설정] = useState(() => {
+    // localStorage 백업이 있으면 마이그레이션이 완료된 것으로 간주
+    return localStorage.getItem('smart-note-폴더목록-backup') !== null;
+  });
 
   const 데이터다운로드하기 = () => {
     try {
@@ -45,9 +50,21 @@ const 설정패널: React.FC = () => {
           
           // 데이터 형식 검증
           if (Array.isArray(파싱된데이터) && 파싱된데이터.length > 0) {
-            await localStorage마이그레이션하기();
-            alert('데이터를 성공적으로 가져왔습니다.');
-            패널열림설정(false);
+            // 업로드된 파일을 localStorage에 임시 저장 후 마이그레이션
+            const 기존백업 = localStorage.getItem('smart-note-폴더목록');
+            localStorage.setItem('smart-note-폴더목록', 내용);
+            
+            try {
+              await localStorage마이그레이션하기();
+              alert('데이터를 성공적으로 가져왔습니다.');
+              패널열림설정(false);
+            } catch (마이그레이션오류) {
+              // 실패 시 기존 데이터 복원
+              if (기존백업) {
+                localStorage.setItem('smart-note-폴더목록', 기존백업);
+              }
+              throw 마이그레이션오류;
+            }
           } else {
             alert('올바른 데이터 형식이 아닙니다.');
           }
@@ -134,23 +151,48 @@ const 설정패널: React.FC = () => {
           {/* Supabase 마이그레이션 */}
           <button 
             className="주요-버튼"
-            onClick={localStorage마이그레이션하기}
-            disabled={로딩중}
-            style={{ padding: '12px', fontSize: '14px', fontWeight: 'bold' }}
+            onClick={async () => {
+              await localStorage마이그레이션하기();
+              마이그레이션완료됨설정(true);
+            }}
+            disabled={로딩중 || 마이그레이션완료됨}
+            style={{ 
+              padding: '12px', 
+              fontSize: '14px', 
+              fontWeight: 'bold',
+              backgroundColor: 마이그레이션완료됨 ? '#28a745' : undefined,
+              borderColor: 마이그레이션완료됨 ? '#28a745' : undefined
+            }}
           >
-            {로딩중 ? '⏳ 마이그레이션 중...' : '🔄 localStorage → Supabase 마이그레이션'}
+            {로딩중 ? '⏳ 마이그레이션 중...' : 
+             마이그레이션완료됨 ? '✅ 마이그레이션 완료됨' : 
+             '🔄 localStorage → Supabase 마이그레이션'}
           </button>
 
           <div style={{ 
             fontSize: '12px', 
             color: '#666', 
             padding: '8px', 
-            backgroundColor: '#e7f3ff',
+            backgroundColor: 오프라인모드 ? '#fff3cd' : 마이그레이션완료됨 ? '#d4edda' : '#e7f3ff',
             borderRadius: '4px',
-            borderLeft: '3px solid #007bff'
+            borderLeft: `3px solid ${오프라인모드 ? '#ffc107' : 마이그레이션완료됨 ? '#28a745' : '#007bff'}`
           }}>
-            💡 기존 브라우저 데이터를 Supabase 클라우드로 이전합니다.<br/>
-            이후 모든 기기에서 동기화됩니다.
+            {오프라인모드 ? (
+              <>
+                📱 오프라인 모드<br/>
+                로컬 캐시 데이터를 사용 중입니다. 온라인 복귀 시 자동 동기화됩니다.
+              </>
+            ) : 마이그레이션완료됨 ? (
+              <>
+                ✅ Supabase 클라우드와 연동됨<br/>
+                🔄 모든 기기에서 실시간 동기화 중
+              </>
+            ) : (
+              <>
+                💡 기존 브라우저 데이터를 Supabase 클라우드로 이전합니다.<br/>
+                이후 모든 기기에서 동기화됩니다.
+              </>
+            )}
           </div>
 
           <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px solid #eee' }} />
